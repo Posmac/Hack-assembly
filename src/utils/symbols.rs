@@ -45,3 +45,21 @@ pub const A_INSTRUCTION: u16 = 0b0 << 15;
 //Memory on/off
 pub const M_ON: u16 = 0b1 << 12;
 pub const M_OFF: u16 = 0b0 << 12;
+
+//Registers
+pub const R1: (&str, u16) = ("R1", 0);
+pub const R2: (&str, u16) = ("R2", 1);
+pub const R3: (&str, u16) = ("R3", 2);
+pub const R4: (&str, u16) = ("R4", 3);
+pub const R5: (&str, u16) = ("R5", 4);
+pub const R6: (&str, u16) = ("R6", 5);
+pub const R7: (&str, u16) = ("R7", 6);
+pub const R8: (&str, u16) = ("R8", 7);
+pub const R9: (&str, u16) = ("R9", 8);
+pub const R10: (&str, u16) = ("R10", 9);
+pub const R11: (&str, u16) = ("R11", 10);
+pub const R12: (&str, u16) = ("R12", 11);
+pub const R13: (&str, u16) = ("R13", 12);
+pub const R14: (&str, u16) = ("R14", 13);
+pub const R15: (&str, u16) = ("R15", 14);
+pub const R16: (&str, u16) = ("R16", 15);
