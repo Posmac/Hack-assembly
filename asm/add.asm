@@ -3,4 +3,4 @@
         temp_1 = 2
         temp_2 = 11
 .program
-        ADD temp temp_1 temp_2
+        ADD R0 temp_1 temp_2

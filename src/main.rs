@@ -1,8 +1,5 @@
-use core::sync;
 use std::collections::HashMap;
-use std::env::consts::EXE_SUFFIX;
 use std::fs::File;
-use std::hint::unreachable_unchecked;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 
 use anyhow::anyhow;
@@ -10,8 +7,8 @@ use anyhow::anyhow;
 use crate::utils::symbols::{
     _RAX_, A_MINUS_D, A_MINUS_ONE, A_OUT, A_PLUS_ONE, C_INSTRUCTION, D_MINUS_A, D_MINUS_ONE, D_OUT,
     D_PLUS_A, D_PLUS_ONE, DATA_SECTION, DEST_A, DEST_D, DEST_M, DEST_NULL, JEQ, JGE, JGT, JLE, JLT,
-    JMP, JNE, JNOT, M_ON, MINUS_ONE_OUT, ONE_OUT, PROGRAM_SECTION, R1, R2, R3, R4, R5, R6, R7, R8,
-    R9, R10, R11, R12, R13, R14, R15, R16, RAX, RDX, ZERO_OUT,
+    JMP, JNE, JNOT, M_ON, MINUS_ONE_OUT, ONE_OUT, PROGRAM_SECTION, R0, R1, R2, R3, R4, R5, R6, R7,
+    R8, R9, R10, R11, R12, R13, R14, R15, RAX, RDX, ZERO_OUT,
 };
 
 pub mod utils;
@@ -139,6 +136,7 @@ fn process_data_section(
 
 fn generate_symbols_table() -> HashMap<String, u16> {
     let mut symbols: HashMap<String, u16> = HashMap::new();
+    symbols.insert(R0.0.to_string(), R0.1);
     symbols.insert(R1.0.to_string(), R1.1);
     symbols.insert(R2.0.to_string(), R2.1);
     symbols.insert(R3.0.to_string(), R3.1);
@@ -154,7 +152,6 @@ fn generate_symbols_table() -> HashMap<String, u16> {
     symbols.insert(R13.0.to_string(), R13.1);
     symbols.insert(R14.0.to_string(), R14.1);
     symbols.insert(R15.0.to_string(), R15.1);
-    symbols.insert(R16.0.to_string(), R16.1);
     symbols
 }
 
@@ -429,6 +426,7 @@ fn expand_comp(
     labels: &HashMap<String, u16>,
     out: &mut Vec<Token>,
 ) {
+    log::info!("TOKEN: {:#?}, SYMBOLS: {:#?}", t, symbols);
     let src_1 = t.var1.as_ref().expect("COMP is not full!");
     let src_2 = t.var2.as_ref().expect("COMP is not full!");
 
