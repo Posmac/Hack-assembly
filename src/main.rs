@@ -783,10 +783,46 @@ fn expand_jump(
     labels: &HashMap<String, u16>,
     out: &mut Vec<Token>,
 ) {
-    match op(&t.dst, symbols, labels) {
-        Operand::Label(l) => {
-            out.extend([li(l), comp(t.mnemonic.as_str(), _RAX_, "", "")]);
+    // JGT R1 @loop_end
+    // JMP 0 @loop_start
+
+    //JMP R0-16/temp @label
+    //JMP 0 @label
+    //JMP RAX/RDX @label
+    //
+    // LI RAX 0 ;20          ;0000 0000 0000 0000 0000
+    // MOV RDX [RAX] ;21     ;1001 110000 010 000 9c10
+    // LI RAX 1 ;22          ;0000 0000 0000 0001 0001
+    // SUB RDX RDX [RAX] ;23 ;1001 010011 010 000 94d0
+    // LI RAX 38 ;24         ;0000 0000 0010 0110 0026
+    // JLT RDX ;25           ;1000 001100 000 100 8304
+    let src = t.var1.as_ref().expect("JMP not full");
+    match (op(&t.dst, symbols, labels), op(&src, symbols, labels)) {
+        (Operand::Var(v), Operand::Label(l)) => {
+            out.extend([
+                li(v),
+                mov(RDX, _RAX_),
+                li(l),
+                comp(t.mnemonic.as_str(), RDX, "", ""),
+            ]);
         }
+        (Operand::Const(c), Operand::Label(l)) => {
+            out.extend([
+                li(c),
+                mov(RDX, RAX),
+                li(l),
+                comp(t.mnemonic.as_str(), RDX, "", ""),
+            ]);
+        }
+        (Operand::Reg(r), Operand::Label(l)) => match r {
+            RAX => {
+                out.extend([mov(RDX, RAX), li(l), comp(t.mnemonic.as_str(), RDX, "", "")]);
+            }
+            RDX => {
+                out.extend([li(l), comp(t.mnemonic.as_str(), RDX, "", "")]);
+            }
+            _ => unreachable!(),
+        },
         _ => unreachable!(),
     };
 }
