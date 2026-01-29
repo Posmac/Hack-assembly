@@ -1,3 +1,10 @@
+pub const RAX: &str = "RAX";
+pub const RDX: &str = "RDX";
+pub const _RAX_: &str = "[RAX]";
+
+pub const PROGRAM_SECTION: &str = ".program";
+pub const DATA_SECTION: &str = ".data";
+
 //(Dest)
 pub const DEST_NULL: u16 = 0b000 << 3;
 pub const DEST_M: u16 = 0b001 << 3;
