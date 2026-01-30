@@ -53,10 +53,15 @@ fn main() -> anyhow::Result<()> {
     let mut instructions: Vec<u16> = vec![];
 
     let mut buf_reader = open_file("asm/add.asm")?;
+    //set varibales to symbols table
     process_data_section(&mut buf_reader, &mut symbols, &mut tokens)?;
-    tokenize(&mut buf_reader, &mut tokens, &mut labels)?;
+    //get initial tokens from code
+    tokenize(&mut buf_reader, &mut tokens)?;
+    //expand tokens to the simplest nt
     let tokens = process_tokens(&mut tokens, &mut symbols, &mut labels)?;
-    generate_instructions(&tokens, &mut instructions)?;
+    log::info!("Tokens: {:#?}", tokens);
+    //generate instructions
+    generate_instructions(&tokens, &labels, &mut instructions)?;
     for i in instructions.iter().enumerate() {
         println!("{} {:016b} {:#06x}", i.0, i.1, i.1);
     }
@@ -167,11 +172,7 @@ fn save_file(instructions: &Vec<u16>, path: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn tokenize(
-    buf_reader: &mut io::BufReader<File>,
-    tokens: &mut Vec<Token>,
-    labels: &mut HashMap<String, u16>,
-) -> anyhow::Result<()> {
+fn tokenize(buf_reader: &mut io::BufReader<File>, tokens: &mut Vec<Token>) -> anyhow::Result<()> {
     let filters: [char; 1] = [' '];
 
     for line in buf_reader.lines() {
@@ -204,21 +205,16 @@ fn tokenize(
             continue;
         }
 
-        if data[0].contains('@') {
-            match labels.insert(data[0].to_string(), tokens.len() as u16) {
-                Some(v) => return Err(anyhow!("Label {:?} already exists {}", data, v)),
-                None => {}
-            };
-            continue;
-        }
-
         let mnemonic = match data.get(0) {
             Some(v) => v.to_string(),
             None => panic!(),
         };
         let dst = match data.get(1) {
             Some(v) => v.to_string(),
-            None => panic!(),
+            None => match data[0].contains('@') {
+                true => String::default(),
+                false => panic!(),
+            },
         };
         let var1 = match data.get(2) {
             Some(v) => Some(v.to_string()),
@@ -245,7 +241,7 @@ fn tokenize(
 fn process_tokens(
     tokens: &mut Vec<Token>,
     symbols: &HashMap<String, u16>,
-    labels: &HashMap<String, u16>,
+    labels: &mut HashMap<String, u16>,
 ) -> anyhow::Result<Vec<Token>> {
     let mut expanded_tokens: Vec<Token> = Vec::with_capacity(symbols.len());
     for t in tokens {
@@ -264,32 +260,47 @@ fn process_tokens(
                 expand_jump(t, symbols, labels, &mut expanded_tokens);
             }
             _ => {
+                if t.mnemonic.contains('@') {
+                    match labels.insert(t.mnemonic.to_string(), expanded_tokens.len() as u16) {
+                        Some(v) => return Err(anyhow!("Label {:?} already exists {}", t, v)),
+                        None => {}
+                    };
+                    continue;
+                }
                 unreachable!()
             }
         }
     }
 
-    log::info!("Expanded: {:#?}", expanded_tokens);
-
     Ok(expanded_tokens)
 }
 
-fn generate_instructions(tokens: &Vec<Token>, instructions: &mut Vec<u16>) -> anyhow::Result<()> {
+fn generate_instructions(
+    tokens: &Vec<Token>,
+    labels: &HashMap<String, u16>,
+    instructions: &mut Vec<u16>,
+) -> anyhow::Result<()> {
     for (i, t) in tokens.iter().enumerate() {
         let line = i + 1;
 
         let instr = match (t.mnemonic.as_str(), t.dst.as_str(), &t.var1, &t.var2) {
-            ("LI", reg, Some(val_str), None) => match reg {
-                "RAX" => match val_str.parse::<u16>() {
-                    Ok(v) => v,
-                    Err(e) => {
-                        return Err(anyhow!(
-                            "Row {line}, failed to parse number {}: {:?}",
-                            val_str,
-                            e
-                        ));
-                    }
-                },
+            ("LI", reg, Some(label), None) => match reg {
+                "RAX" => {
+                    let label_index = match labels.get(label) {
+                        Some(l) => *l,
+                        None => match label.parse::<u16>() {
+                            Ok(v) => v,
+                            Err(e) => {
+                                return Err(anyhow!(
+                                    "Row {line}, failed to parse number {}: {:?}",
+                                    label,
+                                    e
+                                ));
+                            }
+                        },
+                    };
+                    label_index
+                }
                 _ => {
                     return Err(anyhow!("Row {line}, LI: wrong REGISTER {}", reg));
                 }
@@ -426,7 +437,7 @@ fn expand_comp(
     labels: &HashMap<String, u16>,
     out: &mut Vec<Token>,
 ) {
-    log::info!("TOKEN: {:#?}, SYMBOLS: {:#?}", t, symbols);
+    // log::info!("TOKEN: {:#?}, SYMBOLS: {:#?}", t, symbols);
     let src_1 = t.var1.as_ref().expect("COMP is not full!");
     let src_2 = t.var2.as_ref().expect("COMP is not full!");
 
@@ -783,46 +794,40 @@ fn expand_jump(
     labels: &HashMap<String, u16>,
     out: &mut Vec<Token>,
 ) {
-    // JGT R1 @loop_end
-    // JMP 0 @loop_start
-
-    //JMP R0-16/temp @label
-    //JMP 0 @label
-    //JMP RAX/RDX @label
-    //
-    // LI RAX 0 ;20          ;0000 0000 0000 0000 0000
-    // MOV RDX [RAX] ;21     ;1001 110000 010 000 9c10
-    // LI RAX 1 ;22          ;0000 0000 0000 0001 0001
-    // SUB RDX RDX [RAX] ;23 ;1001 010011 010 000 94d0
-    // LI RAX 38 ;24         ;0000 0000 0010 0110 0026
-    // JLT RDX ;25           ;1000 001100 000 100 8304
     let src = t.var1.as_ref().expect("JMP not full");
-    match (op(&t.dst, symbols, labels), op(&src, symbols, labels)) {
-        (Operand::Var(v), Operand::Label(l)) => {
+    match op(&t.dst, symbols, labels) {
+        Operand::Var(v) => {
             out.extend([
                 li(v),
                 mov(RDX, _RAX_),
-                li(l),
+                li(src.as_str()),
                 comp(t.mnemonic.as_str(), RDX, "", ""),
             ]);
         }
-        (Operand::Const(c), Operand::Label(l)) => {
+        Operand::Const(c) => {
             out.extend([
                 li(c),
                 mov(RDX, RAX),
-                li(l),
+                li(src.as_str()),
                 comp(t.mnemonic.as_str(), RDX, "", ""),
             ]);
         }
-        (Operand::Reg(r), Operand::Label(l)) => match r {
+        Operand::Reg(r) => match r {
             RAX => {
-                out.extend([mov(RDX, RAX), li(l), comp(t.mnemonic.as_str(), RDX, "", "")]);
+                out.extend([
+                    mov(RDX, RAX),
+                    li(src.as_str()),
+                    comp(t.mnemonic.as_str(), RDX, "", ""),
+                ]);
             }
             RDX => {
-                out.extend([li(l), comp(t.mnemonic.as_str(), RDX, "", "")]);
+                out.extend([li(src.as_str()), comp(t.mnemonic.as_str(), RDX, "", "")]);
             }
             _ => unreachable!(),
         },
-        _ => unreachable!(),
+        _ => {
+            log::info!("Token: {:#?}", t);
+            unreachable!()
+        }
     };
 }
