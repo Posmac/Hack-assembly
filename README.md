@@ -1,8 +1,5 @@
 # Nand2Tetris Computer Project
 
-## Interpreter
-The assembler and CPU interpreter were implemented in **Rust**.
-
 ## About
 This is an implementation of a basic computer from scratch up to the assembly level, following the **Nand2Tetris** course.  
 Includes:
@@ -11,6 +8,9 @@ Includes:
 - CPU and memory
 - Assembler and simple programs
 - CPU interpreter implemented in **Rust**
+
+## Interpreter
+The assembler and CPU interpreter were implemented in **Rust**.
 
 ## **Screenshots**
 ![Computer Circuit](./screenshot.png)
